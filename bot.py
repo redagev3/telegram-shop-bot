@@ -9,17 +9,14 @@ TOKEN = "8355969427:AAE90WG33-Jdrm5Pg915ZziUeZg3kyCblSg"
 CHANNEL_ID = -1003288178338
 WHITELIST = [8160020054]
 ADMINS = [8160020054]
-YOUR_USER_ID = 8160020054
 USERS_FILE = "users.json"
 
-# Загружаем пользователей
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r') as f:
             return json.load(f)
     return {}
 
-# Сохраняем пользователей
 def save_users(users):
     with open(USERS_FILE, 'w') as f:
         json.dump(users, f, indent=2)
@@ -48,7 +45,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     user_name = update.message.from_user.first_name
     
-    # Сохраняем пользователя
     if user_id not in USERS:
         USERS[user_id] = {
             "name": user_name,
@@ -74,7 +70,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     user_name = update.message.from_user.first_name
     
-    # Сохраняем пользователя при каждом сообщении
     if user_id not in USERS:
         USERS[user_id] = {
             "name": user_name,
@@ -84,13 +79,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_users(USERS)
     
-    # Проверяем бан
     if USERS.get(user_id, {}).get("banned"):
         await update.message.reply_text("🚫 Ты забанен и не можешь использовать бота")
         return
 
     if text == "👤 Профиль":
-        user_id = str(update.message.from_user.id)
         from datetime import datetime
         
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -113,12 +106,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "💾 Сливы":
-        user_id = str(update.message.from_user.id)
-        
-        # Проверяем забан
         if USERS.get(user_id, {}).get("banned"):
             await update.message.reply_text("🚫 Ты забанен и не можешь скачивать файлы")
             return
+        
+        if int(user_id) in WHITELIST:
             keyboard = []
             for file_id, file_info in FILES.items():
                 keyboard.append([KeyboardButton(file_info["name"])])
@@ -134,7 +126,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         is_subscribed = False
         try:
-            member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+            member = await context.bot.get_chat_member(CHANNEL_ID, int(user_id))
             if member.status in ["member", "administrator", "creator"]:
                 is_subscribed = True
         except:
@@ -171,9 +163,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
         if file_info:
-            if 'downloads' not in context.user_data:
-                context.user_data['downloads'] = 0
-            context.user_data['downloads'] += 1
+            if user_id in USERS:
+                USERS[user_id]["downloads"] = USERS[user_id].get("downloads", 0) + 1
+                save_users(USERS)
             
             keyboard = [[KeyboardButton("⬅️ Назад")]]
             reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -208,33 +200,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data["in_files"] = False
 
-async def send_ad(context: ContextTypes.DEFAULT_TYPE):
-    ad_message = (
-        "🎉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🎉\n\n"
-        "📢 ПРИСОЕДИНЯЙСЯ К НАШЕМУ КАНАЛУ!\n\n"
-        "💎 Эксклюзивные сливы и много чего другого\n"
-        "🎮 Профессиональные скрипты и коды\n"
-        "⚡ Регулярные обновления и новинки\n"
-        "🔥 Только лучшее для разработчиков\n\n"
-        "👉 https://t.me/bitocer\n\n"
-        "🎉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🎉"
-    )
-    
-    try:
-        await context.bot.send_message(
-            chat_id=YOUR_USER_ID,
-            text=ad_message
-        )
-    except Exception as e:
-        print(f"Ошибка при отправке рекламы: {e}")
-
 def main():
     app = Application.builder().token(TOKEN).connect_timeout(60).read_timeout(60).write_timeout(60).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
-
-    app.job_queue.run_repeating(send_ad, interval=300, first=10)
 
     print("✅ Бот запущен...")
     app.run_polling(allowed_updates=["message"], drop_pending_updates=True)
